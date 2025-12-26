@@ -3,10 +3,10 @@
 import os
 from groq import Groq
 
-# Client will read GROQ_API_KEY from env if you don't pass api_key explicitly.
-client = Groq()  # or Groq(api_key=os.environ["GROQ_API_KEY"])
+# Client will read GROQ_API_KEY from env 
+client = Groq()  
 
-MODEL_NAME = "llama-3.1-8b-instant"  # fast + cheap recommended model id. [web:294][web:306]
+MODEL_NAME = "llama-3.1-8b-instant"  # fast + cheap 
 
 
 def _chat_once(system_prompt: str, user_prompt: str) -> str:
