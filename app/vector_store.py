@@ -47,7 +47,7 @@ def search_papers(query: str, k: int = 3) -> List[Tuple[str, str, str]]:
         query_embeddings=[query_emb],
         n_results=k,
     )
-    ids = results["ids"][0]                         # these are your arxiv_ids
+    ids = results["ids"][0]                         
     titles = [m.get("title", "") for m in results["metadatas"][0]]
     docs = results["documents"][0]
     return list(zip(ids, titles, docs))
