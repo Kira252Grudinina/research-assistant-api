@@ -1,17 +1,23 @@
 from typing import List, Optional
 from pydantic import BaseModel
 from sentence_transformers import CrossEncoder
+from enum import Enum
+from datetime import datetime, timezone
 
-from .llm_client import generate_answer, critique_question
+
+from .llm_client import generate_answer
 from .vector_store import search_papers
 from .logging_utils import log_query
 
 
-
 class Paper(BaseModel):
-    id: str          # arXiv id, e.g. 1706.03762v1
     title: str
     url: str
+    published: str
+
+
+
+
 
 
 class QueryResponse(BaseModel):
@@ -19,77 +25,161 @@ class QueryResponse(BaseModel):
     papers: List[Paper]
 
 
-class CritiqueResponse(BaseModel):
-    critique: str
+
 
 
 _rerank_model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
 
+def recency_score(published_iso: str) -> float:
+    published = datetime.fromisoformat(published_iso)
+    now = datetime.now(timezone.utc)
+    age_days = (now - published).days
+    return 1.0 / (1.0 + age_days / 30.0)  
+
 
 def _rerank(
     query: str,
-    candidates: List[tuple[str, str, str]],
-) -> List[tuple[str, str, str]]:
+    candidates: List[tuple[str, str, str, str]],
+    recency_weight: float = 0.2,
+    use_recency: bool = False,
+) -> List[tuple[str, str, str, str]]:
     if not candidates:
         return candidates
 
-    contents = [c[2] for c in candidates]
+    # 1) clean content for semantic scoring
+    contents = [
+        c[2]
+        .replace("Year:", "")
+        .replace("Title:", "")
+        .replace("Abstract:", "")
+        for c in candidates
+    ]
+
     pairs = [(query, text) for text in contents]
-    scores = _rerank_model.predict(pairs)
+    sem_scores = _rerank_model.predict(pairs)
 
-    indexed = list(zip(candidates, scores))
-    indexed.sort(key=lambda x: x[1], reverse=True)
-    return [c for (c, s) in indexed]
+    # 2) combine semantic + recency
+    final = []
+    for (pid, title, content, published), sem_score in zip(candidates, sem_scores):
+        score = sem_score
+        if use_recency:
+            score += recency_weight * recency_score(published)
+        final.append(((pid, title, content, published), score))
+
+    # 3) sort by combined score
+    final.sort(key=lambda x: x[1], reverse=True)
+
+    return [c for (c, _) in final]
+
+def wants_recent_papers(query: str) -> bool:
+    q = query.lower()
+    keywords = [
+        "recent",
+        "latest",
+        "state of the art",
+        "sota",
+        "new",
+        "current",
+    ]
+    return any(k in q for k in keywords)
 
 
-def run_research_pipeline(user_query: str, max_papers: Optional[int]) -> QueryResponse:
+async def run_research_pipeline(
+    user_query: str,
+    max_papers: Optional[int],
+    history: Optional[List[str]] = None,
+) -> QueryResponse:
     k = max_papers or 3
-    retrieved = search_papers(user_query, k=10)
-    reranked = _rerank(user_query, retrieved)
-    top_k = reranked[:k]
+
+    retrieved = search_papers(user_query, k=30)
+    use_recency = wants_recent_papers(user_query)
+    reranked = _rerank(user_query, retrieved, use_recency=use_recency)
+
+    # deduplicate by paper (not chunk)
+    seen_papers = set()
+    deduped = []
+
+    for pid, title, content, published in reranked:
+        base_pid = pid.split("_chunk_")[0]
+        if base_pid not in seen_papers:
+            seen_papers.add(base_pid)
+            deduped.append((pid, title, content, published))
+
+    top_k = deduped[:k]
+
+    print("\n[DEBUG] Top retrieved papers:")
+    for i, (pid, title, _, published) in enumerate(top_k[:10]):
+        print(f"{i+1}. {published} — {title} — {pid}")
+    print()
 
     context_chunks: List[str] = []
     papers_for_response: List[Paper] = []
+    seen_paper_ids = set()
 
-    for paper_id, title, content in top_k:
-        context_chunks.append(f"Title: {title}\nContent:\n{content}\n---")
-        url = f"https://arxiv.org/abs/{paper_id}"
-        papers_for_response.append(
-            Paper(
-                id=paper_id,
-                title=title,
-                url=url,
+    for chunk_id, title, content, published in top_k:
+        paper_id = chunk_id.split("_chunk_")[0]
+
+        context_chunks.append(
+    f"Title: {title}\nPublished: {published[:4]}\nContent:\n{content}\n---"
+)
+
+
+        if paper_id not in seen_paper_ids:
+            seen_paper_ids.add(paper_id)
+            papers_for_response.append(
+                Paper(
+                    title=title,
+                    url=f"https://arxiv.org/abs/{paper_id}",
+                    published=published[:10],
+                )
             )
-        )
 
-    paper_ids_used = [p.id for p in papers_for_response]
+
+    # logging
+    paper_ids_used = [
+    p.url.split("/")[-1] for p in papers_for_response
+]
     log_query(user_query, max_papers, paper_ids_used)
 
+    # prompt assembly
     context_text = (
         "\n\n".join(context_chunks)
         if context_chunks
         else "No relevant papers found in the store."
     )
 
+    history_text = ""
+    if history:
+        joined = "\n".join(history[-6:])
+        history_text = f"Conversation so far:\n{joined}\n\n"
+
     prompt = (
-        "You are a research assistant. Use ONLY the context below to answer.\n\n"
+        "Answer the user's question using ONLY the information in the context below.\n"
+        "If the context does not contain enough information to answer fully, say so explicitly.\n"
+        "Answer using only the provided context.\n"
+        "When relevant, attribute claims by mentioning the paper title (not IDs).\n"
+        "Attribute claims implicitly by phrasing (e.g. 'One paper shows that…').\n"
+        "Do not introduce external papers or claims.\n"
+
         "=== CONTEXT START ===\n"
         f"{context_text}\n"
         "=== CONTEXT END ===\n\n"
+        f"{history_text}"
         f"User question: {user_query}\n\n"
-        "Give a concise answer grounded in the context. "
-        "If the context is insufficient, say that clearly."
+        "Answer in a neutral academic tone. Try to simplify the answer as much as possible to make it more readable."
     )
 
-    answer_text = generate_answer(prompt)
+    answer_text = await generate_answer(prompt)
 
     return QueryResponse(answer=answer_text, papers=papers_for_response)
 
 
 
 
-def run_critique_pipeline(user_query: str) -> CritiqueResponse:
-    critique_text = critique_question(
-        f"Critique this research question: {user_query}"
-    )
-    return CritiqueResponse(critique=critique_text)
+
+    # 3) SEARCH (default): run the normal RAG pipeline (history-aware)
+    rag_response = await run_research_pipeline(user_query, max_papers, history)
+    return rag_response
+
+
+

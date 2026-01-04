@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pydantic
+groq
+chromadb
+sentence-transformers
+arxiv
+pypdf
+rank-bm25
