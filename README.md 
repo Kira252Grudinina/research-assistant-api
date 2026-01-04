@@ -75,6 +75,7 @@ Set the key as an environment variable:
 
 ```bash
 export GROQ_API_KEY=your_api_key_here
+```
 
 Run Locally with Docker
 
@@ -84,24 +85,25 @@ docker build -t research-assistant .
 
 
 Run the container:
-
+```
 docker run -p 8000:8000 \
   -e GROQ_API_KEY=YOUR_API_KEY \
   research-assistant
-
+```
 
 The API will be available at:
 
 http://localhost:8000/docs
 
 Example Research Query
-
+```
 curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
   -d '{
     "query": "What reranking strategies are proposed in recent Retrieval-Augmented Generation papers, and how are cross-encoders used?",
     "max_papers": 3
   }'
+```
 
 ##Intended Use
 
