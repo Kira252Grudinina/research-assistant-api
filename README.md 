@@ -1,51 +1,56 @@
-# Research Assistant API (RAG over arXiv)
+# Research Assistant API  
+### Retrieval-Augmented Generation (RAG) over arXiv
+
+A research-oriented Retrieval-Augmented Generation (RAG) API for querying **recent machine learning and AI papers from arXiv**, with a strong focus on **grounded answers, transparent retrieval, and reproducibility**.
+
+This project is designed as a **technical portfolio piece** demonstrating end-to-end RAG system design, including ingestion, hybrid retrieval, cross-encoder reranking, and recency-aware ranking.
+
+---
 
 ## Overview
 
-This project implements a research-oriented Retrieval-Augmented Generation (RAG) API for querying recent machine learning and AI papers from arXiv.
-
-The system ingests recent arXiv papers, indexes them at chunk level, and answers user queries by:
+The system ingests recent arXiv papers, indexes them at **chunk level**, and answers user queries by:
 
 - retrieving relevant paper chunks,
-- re-ranking them with a cross-encoder,
+- re-ranking results using a **cross-encoder**,
 - optionally favoring **recent publications**,
-- generating **grounded answers strictly based on retrieved context**.
+- generating **answers strictly grounded in retrieved context**.
 
-The API is designed for research exploration, literature review, and technical question answering, with a strong emphasis on transparency and reproducibility.
+All answers are explicitly linked to the source papers to avoid hallucinations.
 
 ---
 
 ## Key Features
 
 ### arXiv Ingestion Pipeline
-- Fetches recent papers (currently focused on 2025)
+- Fetches recent arXiv papers (currently focused on **2025**)
 - Supports ML- and AI-relevant categories:
   - `cs.LG` — Machine Learning  
   - `stat.ML` — Statistical Machine Learning  
   - `cs.AI` — Artificial Intelligence  
-  - `cs.MA` — Multi-agent Systems
-- Stores publication timestamps for recency-aware ranking
+  - `cs.MA` — Multi-Agent Systems
+- Stores publication timestamps for **recency-aware ranking**
 
 ### Hybrid Retrieval
-- Dense semantic search using Sentence Transformers
-- Sparse keyword search using BM25
-- Deduplication at paper level (not chunk level)
+- Dense semantic search using **Sentence Transformers**
+- Sparse keyword search using **BM25**
+- Deduplication at **paper level** (not chunk level)
 
 ### Cross-Encoder Re-ranking
-- Uses ** `cross-encoder/ms-marco-MiniLM-L-6-v2` **
-- Re-ranks retrieved chunks based on ** query–content interaction **
+- Uses `cross-encoder/ms-marco-MiniLM-L-6-v2`
+- Re-ranks retrieved chunks based on **query–content interaction**
 
 ### Recency-Aware Ranking
-- Detects recency intent in queries (e.g. latest , recent, state of the art )
-- Applies a ** time-decay score ** based on publication date
+- Detects recency intent in queries (e.g. *latest*, *recent*, *state of the art*)
+- Applies a **time-decay score** based on publication date
 
 ### Grounded Answer Generation
-- Answers are generated only from retrieved context
-- Explicit citation of paper titles 
+- Answers generated **only from retrieved context**
+- Explicit citation of paper titles
 - No hallucinated references
 
 ### Containerized Deployment
-- Fully runnable via ** Docker **
+- Fully runnable via **Docker**
 - Minimal setup for local execution
 
 ---
@@ -54,8 +59,7 @@ The API is designed for research exploration, literature review, and technical q
 
 ### arXiv Categories
 
-The ingestion pipeline targets multiple arXiv categories that commonly host machine learning research.
-
+The ingestion pipeline targets multiple arXiv categories that commonly host cutting-edge machine learning research.
 
 ---
 
@@ -63,57 +67,12 @@ The ingestion pipeline targets multiple arXiv categories that commonly host mach
 
 ### Requirements
 
-To run the API, you must provide a **Groq API key**, which is used for **LLM-based answer generation**.
+To run the API, you must provide a **Groq API key**, used for **LLM-based answer generation**.
 
-You can obtain an API key from:
-
-https://console.groq.com 
-
+You can obtain an API key from:  
+https://console.groq.com
 
 Set the key as an environment variable:
 
-```
-bash
-export GROQ_API_KEY=your_api_key_here
-```
-
-Run Locally with Docker
-
-Build the Docker image:
-
-docker build -t research-assistant .
-
-
-Run the container:
-```
-docker run -p 8000:8000 \
-  -e GROQ_API_KEY=YOUR_API_KEY \
-  research-assistant
-```
-
-The API will be available at:
-
-http://localhost:8000/docs
-
-Example Research Query
-```
-curl -X POST http://localhost:8000/query \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "What reranking strategies are proposed in recent Retrieval-Augmented Generation papers, and how are cross-encoders used?",
-    "max_papers": 3
-  }'
-
-```
-
-## Intended Use
-
-This project is designed as:
-
-- a research assistant prototype,
-
-- a portfolio project demonstrating RAG system design,
-
-- a foundation for further experimentation in literature-aware NLP systems.
-
-It is not intended to be a production-grade scholarly search engine.
+```bash
+export GROQ_API_KEY=your_api_key_here```
