@@ -5,7 +5,7 @@ A research-oriented Retrieval-Augmented Generation (RAG) API for querying **rece
 
 This project is designed as a **technical portfolio piece** demonstrating end-to-end RAG system design, including ingestion, hybrid retrieval, cross-encoder reranking, and recency-aware ranking.
 
----
+
 
 ## Overview
 
@@ -18,7 +18,7 @@ The system ingests recent arXiv papers, indexes them at **chunk level**, and ans
 
 All answers are explicitly linked to the source papers to avoid hallucinations.
 
----
+
 
 ## Key Features
 
@@ -75,4 +75,5 @@ https://console.groq.com
 Set the key as an environment variable:
 
 ```bash
-export GROQ_API_KEY=your_api_key_here```
+export GROQ_API_KEY=your_api_key_here
+```
